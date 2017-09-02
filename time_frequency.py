@@ -6,6 +6,51 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 
+class istft(nn.Module):
+    def __init__(self, n_fft=1024, AC=0)
+        super(isft, self).__init__()
+        assert n_fft % 2 == 0
+        self.n_fft = n_fft
+        self.n_freq = n_freq = n_fft / 2
+        real_conv = nn.Conv2d(n_fft / 2, )
+        real_kernels, imag_kernels = _get_istft_kernels(n_fft)
+        self.real_conv = nn.Conv2d(1, n_fft, (n_freq, 1), stride=1, padding=0)
+        self.imag_conv = nn.Conv2d(1, n_fft, (n_freq, 1), stride=1, padding=0)
+
+        self.real_conv.weight.data.copy_(real_kernels)
+        self.real_conv.bias.data.copy_(AC)
+        self.imag_conv.weight.data.copy_(real_kernels)
+        self.imag_conv.bias.data.copy_(AC)
+    def forward(self, magn, phase):
+        assert magn.size[1] == phase.size[1] == self.n_freq
+        return self.real_conv(magn) - self.imag_conv(phase) 
+
+
+        
+
+        
+
+def _get_istft_kernels(n_fft):
+    n_fft = int(n_fft)
+    assert n_fft % 2 == 0
+    def real_fn(time, freq):
+        return np.cos(2 * np.pi * time * freq) / n_fft
+    
+    def imag_fn(time, freq):
+        return np.sin(2 * np.pi * time * freq) / n_fft
+    
+    real_kernels = 2 * np.fromfunction(real_fn, (int(n_fft), int(n_fft/2)), dtype=np.float32)
+    imag_kernels = 2 * np.fromfunction(imag_fn, (int(n_fft), int(n_fft/2)), dtype=np.float32)
+    real_kernels[-1] = real_kernels[-1] / 2
+    imag_kernels[-1] = imag_kernels[-1] / 2
+    real_kernels = torch.from_numpy(real_kernel[:, :, np.newaxis])
+    imag_kernels = torch.from_numpy(imag_kernel[:, :, np.newaxis])
+    return real_kernels, imag_kernels
+    
+    
+
+
+
 
 class stft(nn.Module):
     def __init__(self, n_fft=1024, n_hop=256):
