@@ -18,7 +18,7 @@ class istft(nn.Module):
         self.imag_conv = nn.Conv2d(1, n_fft, (n_freq, 1), stride=1, padding=0, bias=False)
 
         self.real_conv.weight.data.copy_(real_kernels)
-        self.imag_conv.weight.data.copy_(real_kernels)
+        self.imag_conv.weight.data.copy_(imag_kernels)
         self.real_model = nn.Sequential(self.real_conv)
         self.imag_model = nn.Sequential(self.imag_conv)
     def forward(self, magn, phase, ac):
@@ -36,10 +36,23 @@ def _get_istft_kernels(n_fft):
     n_fft = int(n_fft)
     assert n_fft % 2 == 0
     def kernel_fn(time, freq):
-        return np.exp(1j * (2 * np.pi * time * freq) / n_fft)
+        return np.exp(1j * (2 * np.pi * time * freq) / 1024.)
+
 
     kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float32)
-    np.save("wrong", kernels)
+
+
+    '''
+    kernels = np.zeros((1024, 513)) * 1j
+
+    for i in range(1024):
+        for j in range(513):
+            kernels[i, j] = kernel_fn(i, j)
+    '''
+
+    kernels = 2 * kernels[:, 1:]
+    kernels[:, -1] = kernels[:, -1] / 2.0
+
     real_kernels = np.real(kernels)
     imag_kernels = np.imag(kernels)
 
