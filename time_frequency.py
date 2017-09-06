@@ -119,7 +119,7 @@ def _get_istft_kernels(n_fft):
             kernels[i, j] = kernel_fn(i, j)
 
     window = _hann(n_fft, sym=False)[:int(n_fft/2+1)]
-   #  kernels = kernels * window
+    # kernels = kernels * window
     ac_cof = float(np.real(kernels[0, 0]))
 
 
@@ -262,15 +262,18 @@ if __name__ == '__main__':
     real_out = out[0] + 1j * out[1]
 
     torch_out = np.abs(real_out[0,:,0,:])
-    print(torch_out[:20])
+
+    print("#################torch_audio##################")
+    print(torch_out[:5])
     print(torch_out.shape)
 
 
     ## librosa
     import librosa
-    librosa_out = np.abs(librosa.stft(signal, n_fft=1024, hop_length=256, center=False))
+    librosa_out = np.abs(librosa.stft(signal, n_fft=1024, hop_length=512, center=False))
 
-    print(librosa_out[:20])
+    print("#################librosa##################")
+    print(librosa_out[:5])
     print(librosa_out.shape)
 
    # print(np.max(torch_out - np_out))
@@ -280,11 +283,4 @@ if __name__ == '__main__':
 
 
 
-class transpose(nn.Module):
-    def __init__(self, dim0, dim1):
-        super(transpose, self).__init__()
-        self.dim0 = dim0
-        self.dim1 = dim1
 
-    def forward(self, input):
-        return torch.transpose(input, dim0, dim1, out=input)
