@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+import scipy.signal
 
 
 class ifft(nn.Module):
@@ -71,18 +72,25 @@ def _get_ifft_kernels(n_fft):
 
 
 class istft(nn.Module):
-    def __init__(self, n_fft=1024, hop_length=512):
+    def __init__(self, n_fft=1024, hop_length=512, window="hanning"):
         super(istft, self).__init__()
         assert n_fft % 2 == 0
-        assert hop_length < n_fft
+        assert hop_length <= n_fft
         self.hop_length = hop_length
+        self.window = window
 
         self.n_fft = int(n_fft)
         self.n_freq = n_freq = int(n_fft / 2)
-        self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(n_fft)
+        self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(n_fft, window)
 
         trans_kernels = np.zeros((n_fft, n_fft), np.float32)
-        np.fill_diagonal(trans_kernels, 1.)
+        if window == "hanning":
+            win_cof = 1 / scipy.signal.get_window("hanning", n_fft).clip(min=1e-14)
+            win_cof[0] = 0
+        else:
+            win_cof = np.ones((n_fft, ), dtype=np.float32)
+        np.fill_diagonal(trans_kernels, win_cof)
+
         self.trans_kernels = Variable(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
 
 
@@ -102,7 +110,7 @@ class istft(nn.Module):
         return output
 
 
-def _get_istft_kernels(n_fft):
+def _get_istft_kernels(n_fft, window):
     n_fft = int(n_fft)
     assert n_fft % 2 == 0
     def kernel_fn(time, freq):
@@ -118,8 +126,18 @@ def _get_istft_kernels(n_fft):
         for j in range(513):
             kernels[i, j] = kernel_fn(i, j)
 
-    window = _hann(n_fft, sym=False)[:int(n_fft/2+1)]
-    # kernels = kernels * window
+
+    '''
+    if window == "hanning":
+        print("kernels", kernels.shape)
+        print(kernels[100][10:14])
+        window = scipy.signal.get_window(window, n_fft, scipy.signal.get_window)[:n_fft//2+1]
+        print(window[10:14])
+        kernels = kernels * window
+        print(kernels[100][10:14])
+    '''
+
+
     ac_cof = float(np.real(kernels[0, 0]))
 
 
