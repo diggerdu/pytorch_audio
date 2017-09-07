@@ -41,14 +41,16 @@ def _get_ifft_kernels(n_fft):
         return np.exp(1j * (2 * np.pi * time * freq) / 1024.)
 
 
-    # kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float32)
+    kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float64)
 
 
     kernels = np.zeros((1024, 513)) * 1j
 
+    '''
     for i in range(1024):
         for j in range(513):
             kernels[i, j] = kernel_fn(i, j)
+    '''
 
 
 
@@ -95,8 +97,12 @@ class istft(nn.Module):
 
 
     def forward(self, magn, phase, ac):
+
         assert magn.size()[2] == phase.size()[2] == self.n_freq
         n_fft = self.n_fft
+
+        # complex conjugate
+        phase = -1. * phase
         real_part = F.conv2d(magn, self.real_kernels)
         imag_part = F.conv2d(phase, self.imag_kernels)
 
@@ -114,28 +120,20 @@ def _get_istft_kernels(n_fft, window):
     n_fft = int(n_fft)
     assert n_fft % 2 == 0
     def kernel_fn(time, freq):
-        return np.exp(1j * (2 * np.pi * time * freq) / 1024.)
+        return np.exp(1j * (2 * np.pi * time * freq) / n_fft)
 
 
-    # kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float32)
+    '''
+    kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float64)
 
 
-    kernels = np.zeros((1024, 513)) * 1j
 
-    for i in range(1024):
-        for j in range(513):
+    '''
+    kernels = 1j * np.zeros((n_fft, n_fft//2+1))
+    for i in range(n_fft):
+        for j in range(n_fft//2+1):
             kernels[i, j] = kernel_fn(i, j)
 
-
-    '''
-    if window == "hanning":
-        print("kernels", kernels.shape)
-        print(kernels[100][10:14])
-        window = scipy.signal.get_window(window, n_fft, scipy.signal.get_window)[:n_fft//2+1]
-        print(window[10:14])
-        kernels = kernels * window
-        print(kernels[100][10:14])
-    '''
 
 
     ac_cof = float(np.real(kernels[0, 0]))
@@ -155,150 +153,95 @@ def _get_istft_kernels(n_fft, window):
 
 
 
-
-
 class stft(nn.Module):
-    def __init__(self, n_fft=1024, n_hop=512):
+    def __init__(self, n_fft=1024, hop_length=512, window="hanning"):
         super(stft, self).__init__()
         assert n_fft % 2 == 0
-        self.n_fft = int(n_fft)
-        self.nb_filter = int(n_fft / 2 + 1)
 
+        self.hop_length = hop_length
+        self.n_freq = n_freq = n_fft//2 + 1
 
-
-        real_kernels, imag_kernels = _get_stft_kernels(self.n_fft)
-        real_conv = nn.Conv2d(1, self.nb_filter, (1, n_fft), stride=n_hop, bias=False)
-        imag_conv = nn.Conv2d(1, self.nb_filter, (1, n_fft), stride=n_hop, bias=False)
-
-        real_conv.weight.data.copy_(real_kernels)
-        imag_conv.weight.data.copy_(imag_kernels)
-
-        self.real_model = nn.Sequential(real_conv)
-        self.imag_model = nn.Sequential(imag_conv)
+        self.real_kernels, self.imag_kernels = _get_stft_kernels(n_fft, window)
 
     def forward(self, sample):
-        return torch.stack([self.real_model(sample), self.imag_model(sample)])
+        magn = F.conv2d(sample, self.real_kernels, stride=self.hop_length)
+        phase = F.conv2d(sample, self.imag_kernels, stride=self.hop_length)
+
+        # complex conjugate
+        phase = -1. * phase[:,1:,:,:]
+        ac = magn[:,0,:,:]
+        magn = magn[:,1:,:,:]
+        return magn, phase, ac
 
 
-def _get_stft_kernels(n_dft):
-    n_dft = int(n_dft)
-    assert n_dft % 2 == 0
-    nb_filter = int(n_dft / 2 + 1)
+def _get_stft_kernels(n_fft, window):
+    n_fft = int(n_fft)
+    assert n_fft % 2 == 0
 
-    def calRealBin(freq, time):
-        return np.cos((2 * np.pi * freq) / np.float32(n_dft) * time)
+    def kernel_fn(freq, time):
+        return np.exp(-1j * (2 * np.pi * time * freq) / float(n_fft))
 
-    def calImagBin(freq, time):
-        return np.sin((2 * np.pi * freq) / np.float32(n_dft) * time)
+    kernels = np.fromfunction(kernel_fn, (n_fft//2+1, n_fft), dtype=np.float64)
 
 
-    dft_real_kernels = np.fromfunction(calRealBin, (int(n_dft), int(n_dft)), dtype=np.float32)
 
-    dft_imag_kernels = np.fromfunction(calImagBin, (int(n_dft), int(n_dft)), dtype=np.float32)
-    '''
-
-    w_ks = [(2 * np.pi * k) / float(n_dft) for k in range(n_dft)]
-    timesteps = range(n_dft)
-    dft_real_kernels = np.array([[np.cos(w_k * n) for n in timesteps] for w_k in w_ks])
-    dft_imag_kernels = np.array([[np.sin(w_k * n) for n in timesteps] for w_k in w_ks])
-
-    '''
-
-    dft_window = _hann(n_dft, sym=False)
-    # dft_window = np.hanning(1024)
-    dft_window = dft_window.reshape((1, -1))
-    dft_real_kernels = np.multiply(dft_real_kernels, dft_window)[:nb_filter]
-    dft_imag_kernels = np.multiply(dft_imag_kernels, dft_window)[:nb_filter]
-    dft_real_kernels = dft_real_kernels[:, np.newaxis, np.newaxis, :]
-    dft_imag_kernels = dft_imag_kernels[:, np.newaxis, np.newaxis, :]
+    if window == "hanning":
+        win_cof = scipy.signal.get_window("hanning", n_fft)[np.newaxis, :]
+    else:
+        win_cof = np.ones((1, n_fft), dtype=np.float64)
 
 
-    '''
-    dft_window = _hann(n_dft, sym=False)
-    # dft_window = np.hanning(n_dft)
-    dft_window = np.array([dft_window]*n_dft).T
+    kernels = kernels[:, np.newaxis, np.newaxis, :]
 
-    dft_real_kernels = np.multiply(dft_real_kernels, dft_window)
-    dft_real_kernels = np.multiply(dft_real_kernels, dft_window)
+    real_kernels = Variable(torch.from_numpy(np.real(kernels)).float())
+    imag_kernels = Variable(torch.from_numpy(np.imag(kernels)).float())
 
-    dft_real_kernels = dft_real_kernels[:, np.newaxis, np.newaxis, :]
-    dft_imag_kernels = dft_imag_kernels[:, np.newaxis, np.newaxis, :]
-
-    '''
-
-
-    return torch.from_numpy(dft_real_kernels), torch.from_numpy(dft_imag_kernels)
+    return real_kernels, imag_kernels
 
 
 
 
 
-
-
-
-
-def _hann(M, sym=True):
-    '''[np]
-    Return a Hann window.
-    copied and pasted from scipy.signal.hann,
-    https://github.com/scipy/scipy/blob/v0.14.0/scipy/signal/windows.py#L615
-    ----------
-    Parameters
-    ----------
-    M : int
-        Number of points in the output window. If zero or less, an empty
-        array is returned.
-    sym : bool, optional
-        When True (default), generates a symmetric window, for use in filter
-        design.
-        When False, generates a periodic window, for use in spectral analysis.
-    Returns
-    -------
-    w : ndarray
-        The window, with the maximum value normalized to 1 (though the value 1
-        does not appear if `M` is even and `sym` is True).
-
-    '''
-    if M < 1:
-        return np.array([])
-    if M == 1:
-        return np.ones(1, 'd')
-    odd = M % 2
-    if not sym and not odd:
-        M = M + 1
-    n = np.arange(0, M)
-    w = 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
-    if not sym and not odd:
-        w = w[:-1]
-    return w.astype(np.float32)
 
 if __name__ == '__main__':
-    signal = np.ones((4096,))
+    # signal = np.random.random(4096)
+    # signal = np.arange(4096)
+    signal = np.ones((4096, ))
     input_ = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).float())
-    model = stft()
-    out = model(input_).data.numpy()
-    real_out = out[0] + 1j * out[1]
+    model = stft(n_fft=1024, hop_length=512, window="hanning")
+    magn, phase, ac = model(input_)
+    magn = magn.data.numpy().squeeze(axis=(0, 2))
 
-    torch_out = np.abs(real_out[0,:,0,:])
 
     print("#################torch_audio##################")
-    print(torch_out[:5])
-    print(torch_out.shape)
+    print(magn[200:210, 3])
+    print(magn.shape)
 
 
     ## librosa
     import librosa
-    librosa_out = np.abs(librosa.stft(signal, n_fft=1024, hop_length=512, center=False))
+    librosa_out = librosa.stft(signal, n_fft=1024, hop_length=512, center=False)
 
     print("#################librosa##################")
-    print(librosa_out[:5])
+    print(np.real(librosa_out)[201:211, 3])
     print(librosa_out.shape)
 
    # print(np.max(torch_out - np_out))
 
+'''
 
+if __name__ == '__main__':
+    signal = 1000 * np.ones((1024,), dtype=np.float32)
+    input_ = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).double())
+    model = stft(n_fft=1024, hop_length=512, window="NO")
+    magn, phase, ac = model(input_)
+    magn = magn.data.numpy().squeeze(axis=(0, 2)).flatten()
 
+    np_spec = np.fft.fft(signal)
 
+    print(magn[250:260])
+    print(np.real(np_spec[251:261]))
 
-
-
+    print(ac)
+    print(np.real(np_spec[0]))]
+'''
