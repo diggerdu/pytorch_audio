@@ -93,13 +93,12 @@ class istft(nn.Module):
             win_cof = np.ones((n_fft, ), dtype=np.float32)
         np.fill_diagonal(trans_kernels, win_cof)
 
-        self.trans_kernels = Variable(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
+        self.trans_kernels = nn.Parameter(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
 
 
     def forward(self, magn, phase, ac):
-        magn = magn.permute(0, 2, 1, 3)
-        phase = phase.permute(0, 2, 1, 3)
-
+        print('istft_debug', magn.size())
+        print('istft_debug', phase.size())
         assert magn.size()[2] == phase.size()[2] == self.n_freq
         n_fft = self.n_fft
 
@@ -110,11 +109,19 @@ class istft(nn.Module):
 
         output = real_part - imag_part
 
-        ac = ac.expand_as(output) * self.ac_cof
-        output = output + ac
-        output = output / self.n_fft
+        print('stft forward debug', output.size())
 
+        ac = ac.unsqueeze(1)
+        print('stft forward debug', ac.size())
+        ac = float(self.ac_cof) * ac.expand_as(output)
+        output = output + ac
+        output = output / float(self.n_fft)
+
+        print('stft forward debug', output.size())
         output = F.conv_transpose2d(output, self.trans_kernels, stride=self.hop_length)
+        output = output.squeeze(1)
+        output = output.squeeze(1)
+        print('stft forward debug output', output.size())
         return output
 
 
@@ -149,8 +156,8 @@ def _get_istft_kernels(n_fft, window):
     imag_kernels = np.imag(kernels)
 
 
-    real_kernels = Variable(torch.from_numpy(real_kernels[:, np.newaxis, :, np.newaxis]).float())
-    imag_kernels = Variable(torch.from_numpy(imag_kernels[:, np.newaxis, :, np.newaxis]).float())
+    real_kernels = nn.Parameter(torch.from_numpy(real_kernels[:, np.newaxis, :, np.newaxis]).float())
+    imag_kernels = nn.Parameter(torch.from_numpy(imag_kernels[:, np.newaxis, :, np.newaxis]).float())
     return real_kernels, imag_kernels, ac_cof
 
 
@@ -166,13 +173,19 @@ class stft(nn.Module):
         self.real_kernels, self.imag_kernels = _get_stft_kernels(n_fft, window)
 
     def forward(self, sample):
+        sample = sample.unsqueeze(1)
+        sample = sample.unsqueeze(1)
+
         magn = F.conv2d(sample, self.real_kernels, stride=self.hop_length)
         phase = F.conv2d(sample, self.imag_kernels, stride=self.hop_length)
 
+        magn = magn.permute(0, 2, 1, 3)
+        phase = phase.permute(0, 2, 1, 3)
+
         # complex conjugate
-        phase = -1. * phase[:,1:,:,:]
-        ac = magn[:,0,:,:]
-        magn = magn[:,1:,:,:]
+        phase = -1. * phase[:,:,1:,:]
+        ac = magn[:,:,0,:]
+        magn = magn[:,:,1:,:]
         return magn, phase, ac
 
 
@@ -195,8 +208,8 @@ def _get_stft_kernels(n_fft, window):
 
     kernels = kernels[:, np.newaxis, np.newaxis, :]
 
-    real_kernels = Variable(torch.from_numpy(np.real(kernels)).float())
-    imag_kernels = Variable(torch.from_numpy(np.imag(kernels)).float())
+    real_kernels = nn.Parameter(torch.from_numpy(np.real(kernels)).float())
+    imag_kernels = nn.Parameter(torch.from_numpy(np.imag(kernels)).float())
 
     return real_kernels, imag_kernels
 

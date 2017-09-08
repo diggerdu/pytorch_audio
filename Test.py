@@ -47,12 +47,12 @@ class TimeFrequencyTestCase(unittest.TestCase):
         print("###########TESTING ISTFT###########")
         signal = np.random.random(4096)
         spec = librosa.stft(signal, n_fft=1024, hop_length=512, center=False)
-        magn = np.real(spec)[np.newaxis, :, np.newaxis, :]
-        phase = np.imag(spec)[np.newaxis, :, np.newaxis, :]
+        magn = np.real(spec)[np.newaxis, np.newaxis, :, :]
+        phase = np.imag(spec)[np.newaxis, np.newaxis, :, :]
 
-        ac = magn[:, 0, :, :]
-        magn = magn[:, 1:, :, :]
-        phase = phase[:, 1:, :, :]
+        ac = magn[:, :, 0, :]
+        magn = magn[:, :, 1:, :]
+        phase = phase[:, :, 1:, :]
 
         magn = Variable(torch.from_numpy(magn).float())
         phase = Variable(torch.from_numpy(phase).float())
@@ -67,6 +67,8 @@ class TimeFrequencyTestCase(unittest.TestCase):
         print("###########ISTFT TESTED###########\n")
 
 
+
+    '''
     def test_istft_element(self):
         print("\n###########TESTING ISTFT ELEMENT###########")
 
@@ -91,6 +93,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
         self.assertTrue(snr > 60)
         print("###########ISTFT TRANSPOSE TESTED###########\n")
+    '''
 
 
 
@@ -99,7 +102,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
         N = 1024
         signal = np.random.random(4*N)
-        input = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).float())
+        input = Variable(torch.from_numpy(signal[np.newaxis, :]).float())
         stft_model = tf.stft()
         istft_model = tf.istft()
 
