@@ -11,8 +11,8 @@ import librosa
 
 def CalSNR(ref, sig):
     ref_p = np.square(ref)
-    noi_p = np.square(sig - ref).clip(min=1e-14)
-    return 10 * np.log10(np.mean(ref_p / noi_p))
+    noi_p = np.square(sig - ref)
+    return 10 * np.mean(np.log10(ref_p) - np.log10(noi_p))
 
 
 class TimeFrequencyTestCase(unittest.TestCase):
@@ -59,6 +59,10 @@ class TimeFrequencyTestCase(unittest.TestCase):
         ac = Variable(torch.from_numpy(ac).float())
         model = tf.istft(1024, 512, window="hanning")
         re_signal = model.forward(magn, phase, ac).data.numpy().flatten()
+
+        print(re_signal[1000:1020])
+        print(signal[1000:1020])
+
 
         snr = CalSNR(signal, re_signal)
         print("SNR:{} dB".format(snr))
@@ -109,8 +113,12 @@ class TimeFrequencyTestCase(unittest.TestCase):
         magn, phase, ac = stft_model(input)
 
         re_signal = istft_model.forward(magn, phase, ac)
-
         re_signal = re_signal.data.numpy().flatten()
+
+        print(re_signal[1000:1020])
+        print(signal[1000:1020])
+
+
         snr = CalSNR(re_signal, signal)
         print("SNR:{} dB".format(snr))
 
