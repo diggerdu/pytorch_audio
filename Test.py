@@ -99,12 +99,11 @@ class TimeFrequencyTestCase(unittest.TestCase):
         print("###########ISTFT TRANSPOSE TESTED###########\n")
     '''
 
-    '''
     def test_stft(self):
         print("\n###########TESTING STFT###########")
 
         N = 1024
-        signal = np.random.random(4*N)
+        signal = np.random.random(100000 * N)
         input = Variable(torch.from_numpy(signal[np.newaxis, :]).float())
         stft_model = tf.stft()
         istft_model = tf.istft()
@@ -114,8 +113,8 @@ class TimeFrequencyTestCase(unittest.TestCase):
         re_signal = istft_model.forward(magn, phase, ac)
         re_signal = re_signal.data.numpy().flatten()
 
-        print(re_signal[1000:1020])
-        print(signal[1000:1020])
+        print(re_signal[10600:10620])
+        print(signal[10600:10620])
 
 
         snr = CalSNR(re_signal, signal)
@@ -124,7 +123,6 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
         self.assertTrue(snr > 60)
         print("###########STFT TESTED###########\n")
-    '''
 
 
 if __name__ == '__main__':
