@@ -9,14 +9,14 @@ import scipy.signal
 
 
 class ifft(nn.Module):
-    def __init__(self, n_fft=1024):
+    def __init__(self, nfft=1024):
         super(ifft, self).__init__()
-        assert n_fft % 2 == 0
-        self.n_fft = int(n_fft)
-        self.n_freq = n_freq = int(n_fft / 2)
-        real_kernels, imag_kernels, self.ac_cof = _get_ifft_kernels(n_fft)
-        self.real_conv = nn.Conv2d(1, n_fft, (n_freq, 1), stride=1, padding=0, bias=False)
-        self.imag_conv = nn.Conv2d(1, n_fft, (n_freq, 1), stride=1, padding=0, bias=False)
+        assert nfft % 2 == 0
+        self.nfft = int(nfft)
+        self.n_freq = n_freq = int(nfft / 2)
+        real_kernels, imag_kernels, self.ac_cof = _get_ifft_kernels(nfft)
+        self.real_conv = nn.Conv2d(1, nfft, (n_freq, 1), stride=1, padding=0, bias=False)
+        self.imag_conv = nn.Conv2d(1, nfft, (n_freq, 1), stride=1, padding=0, bias=False)
 
         self.real_conv.weight.data.copy_(real_kernels)
         self.imag_conv.weight.data.copy_(imag_kernels)
@@ -27,21 +27,21 @@ class ifft(nn.Module):
         output = self.real_model(magn) - self.imag_model(phase)
         if ac is not None:
             output = output + ac * self.ac_cof
-        return output / self.n_fft
+        return output / self.nfft
 
 
 
 
 
 
-def _get_ifft_kernels(n_fft):
-    n_fft = int(n_fft)
-    assert n_fft % 2 == 0
+def _get_ifft_kernels(nfft):
+    nfft = int(nfft)
+    assert nfft % 2 == 0
     def kernel_fn(time, freq):
         return np.exp(1j * (2 * np.pi * time * freq) / 1024.)
 
 
-    kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float64)
+    kernels = np.fromfunction(kernel_fn, (int(nfft), int(nfft/2+1)), dtype=np.float64)
 
 
     kernels = np.zeros((1024, 513)) * 1j
@@ -74,29 +74,27 @@ def _get_ifft_kernels(n_fft):
 
 
 class istft(nn.Module):
-    def __init__(self, n_fft=1024, hop_length=512, window="hanning"):
+    def __init__(self, nfft=1024, hop_length=512):
         super(istft, self).__init__()
-        assert n_fft % 2 == 0
-        assert hop_length <= n_fft
+        assert nfft % 2 == 0
+        assert hop_length <= nfft
         self.hop_length = hop_length
-        self.window = window
 
-        self.n_fft = int(n_fft)
-        self.n_freq = n_freq = int(n_fft / 2)
-        self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(n_fft, window)
+        self.nfft = int(nfft)
+        self.n_freq = n_freq = int(nfft / 2)
+        self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(nfft, window)
 
-        trans_kernels = np.zeros((n_fft, n_fft), np.float64)
-        win_cof = np.ones((n_fft, ), dtype=np.float64)
+        trans_kernels = np.zeros((nfft, nfft), np.float64)
+        win_cof = np.ones((nfft, ), dtype=np.float64)
         np.fill_diagonal(trans_kernels, win_cof)
 
         self.trans_kernels = nn.Parameter(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
-
 
     def forward(self, magn, phase, ac):
         print('istft_debug', magn.size())
         print('istft_debug', phase.size())
         assert magn.size()[2] == phase.size()[2] == self.n_freq
-        n_fft = self.n_fft
+        nfft = self.nfft
 
         # complex conjugate
         phase = -1. * phase
@@ -111,7 +109,7 @@ class istft(nn.Module):
         print('stft forward debug', ac.size())
         ac = float(self.ac_cof) * ac.expand_as(output)
         output = output + ac
-        output = output / float(self.n_fft)
+        output = output / float(self.nfft)
 
         print('stft forward debug', output.size())
         output = F.conv_transpose2d(output, self.trans_kernels, stride=self.hop_length)
@@ -120,37 +118,20 @@ class istft(nn.Module):
         print('stft forward debug output', output.size())
         return output
 
-
-def _get_istft_kernels(n_fft, window):
-    n_fft = int(n_fft)
-    assert n_fft % 2 == 0
+def _get_istft_kernels(nfft, window):
+    nfft = int(nfft)
+    assert nfft % 2 == 0
     def kernel_fn(time, freq):
-        return np.exp(1j * (2 * np.pi * time * freq) / n_fft)
-
-
-    kernels = np.fromfunction(kernel_fn, (int(n_fft), int(n_fft/2+1)), dtype=np.float64)
-
-
-
-    '''
-    kernels = 1j * np.zeros((n_fft, n_fft//2+1))
-    for i in range(n_fft):
-        for j in range(n_fft//2+1):
-            kernels[i, j] = kernel_fn(i, j)
-
-    '''
-
+        return np.exp(1j * (2 * np.pi * time * freq) / nfft)
+    kernels = np.fromfunction(kernel_fn, (int(nfft), int(nfft/2+1)), dtype=np.float64)
 
     ac_cof = float(np.real(kernels[0, 0]))
-
-
 
     kernels = 2 * kernels[:, 1:]
     kernels[:, -1] = kernels[:, -1] / 2.0
 
     real_kernels = np.real(kernels)
     imag_kernels = np.imag(kernels)
-
 
     real_kernels = nn.Parameter(torch.from_numpy(real_kernels[:, np.newaxis, :, np.newaxis]).float())
     imag_kernels = nn.Parameter(torch.from_numpy(imag_kernels[:, np.newaxis, :, np.newaxis]).float())
@@ -159,14 +140,14 @@ def _get_istft_kernels(n_fft, window):
 
 
 class stft(nn.Module):
-    def __init__(self, n_fft=1024, hop_length=512, window="hanning"):
+    def __init__(self, nfft=1024, hop_length=512, window="hanning"):
         super(stft, self).__init__()
-        assert n_fft % 2 == 0
+        assert nfft % 2 == 0
 
         self.hop_length = hop_length
-        self.n_freq = n_freq = n_fft//2 + 1
+        self.n_freq = n_freq = nfft//2 + 1
 
-        self.real_kernels, self.imag_kernels = _get_stft_kernels(n_fft, window)
+        self.real_kernels, self.imag_kernels = _get_stft_kernels(nfft, window)
 
     def forward(self, sample):
         sample = sample.unsqueeze(1)
@@ -185,22 +166,19 @@ class stft(nn.Module):
         return magn, phase, ac
 
 
-def _get_stft_kernels(n_fft, window):
-    n_fft = int(n_fft)
-    assert n_fft % 2 == 0
+def _get_stft_kernels(nfft, window):
+    nfft = int(nfft)
+    assert nfft % 2 == 0
 
     def kernel_fn(freq, time):
-        return np.exp(-1j * (2 * np.pi * time * freq) / float(n_fft))
+        return np.exp(-1j * (2 * np.pi * time * freq) / float(nfft))
 
-    kernels = np.fromfunction(kernel_fn, (n_fft//2+1, n_fft), dtype=np.float64)
-
-
+    kernels = np.fromfunction(kernel_fn, (nfft//2+1, nfft), dtype=np.float64)
 
     if window == "hanning":
-        win_cof = scipy.signal.get_window("hanning", n_fft)[np.newaxis, :]
+        win_cof = scipy.signal.get_window("hanning", nfft)[np.newaxis, :]
     else:
-        win_cof = np.ones((1, n_fft), dtype=np.float64)
-
+        win_cof = np.ones((1, nfft), dtype=np.float64)
 
     kernels = kernels[:, np.newaxis, np.newaxis, :] * win_cof
 
@@ -219,7 +197,7 @@ if __name__ == '__main__':
     # signal = np.arange(4096)
     signal = np.ones((4096, ))
     input_ = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).float())
-    model = stft(n_fft=1024, hop_length=512, window="hanning")
+    model = stft(nfft=1024, hop_length=512, window="hanning")
     magn, phase, ac = model(input_)
     magn = magn.data.numpy().squeeze(axis=(0, 2))
 
@@ -231,7 +209,7 @@ if __name__ == '__main__':
 
     ## librosa
     import librosa
-    librosa_out = librosa.stft(signal, n_fft=1024, hop_length=512, center=False)
+    librosa_out = librosa.stft(signal, nfft=1024, hop_length=512, center=False)
 
     print("#################librosa##################")
     print(np.real(librosa_out)[201:211, 3])
@@ -244,7 +222,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     signal = 1000 * np.ones((1024,), dtype=np.float32)
     input_ = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).double())
-    model = stft(n_fft=1024, hop_length=512, window="NO")
+    model = stft(nfft=1024, hop_length=512, window="NO")
     magn, phase, ac = model(input_)
     magn = magn.data.numpy().squeeze(axis=(0, 2)).flatten()
 

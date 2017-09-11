@@ -103,7 +103,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
         print("\n###########TESTING STFT###########")
 
         N = 1024
-        signal = np.random.random(100000 * N)
+        signal = np.random.random(10 * N)
         input = Variable(torch.from_numpy(signal[np.newaxis, :]).float())
         stft_model = tf.stft()
         istft_model = tf.istft()
