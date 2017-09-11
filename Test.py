@@ -60,8 +60,8 @@ class TimeFrequencyTestCase(unittest.TestCase):
         model = tf.istft(1024, 512, window="hanning")
         re_signal = model.forward(magn, phase, ac).data.numpy().flatten()
 
-        print(re_signal[1000:1020])
-        print(signal[1000:1020])
+        print(re_signal[500:520])
+        print(signal[500:520])
 
 
         snr = CalSNR(signal, re_signal)
@@ -99,8 +99,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
         print("###########ISTFT TRANSPOSE TESTED###########\n")
     '''
 
-
-
+    '''
     def test_stft(self):
         print("\n###########TESTING STFT###########")
 
@@ -125,6 +124,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
         self.assertTrue(snr > 60)
         print("###########STFT TESTED###########\n")
+    '''
 
 
 if __name__ == '__main__':

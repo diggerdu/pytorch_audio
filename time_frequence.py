@@ -86,11 +86,12 @@ class istft(nn.Module):
         self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(n_fft, window)
 
         trans_kernels = np.zeros((n_fft, n_fft), np.float32)
-        if window == "hanning":
-            win_cof = 1 / scipy.signal.get_window("hanning", n_fft).clip(min=1e-14)
-            win_cof[0] = 0
-        else:
-            win_cof = np.ones((n_fft, ), dtype=np.float32)
+        #if window == "hanning":
+           # win_cof = 1 / scipy.signal.get_window("hanning", n_fft)
+            #win_cof[0] = 0
+        #else:
+
+        win_cof = np.ones((n_fft, ), dtype=np.float32)
         np.fill_diagonal(trans_kernels, win_cof)
 
         self.trans_kernels = nn.Parameter(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
