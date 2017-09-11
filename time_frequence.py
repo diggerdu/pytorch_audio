@@ -82,7 +82,7 @@ class istft(nn.Module):
 
         self.nfft = int(nfft)
         self.n_freq = n_freq = int(nfft / 2)
-        self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(nfft, window)
+        self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(nfft)
 
         trans_kernels = np.zeros((nfft, nfft), np.float64)
         win_cof = np.ones((nfft, ), dtype=np.float64)
@@ -118,7 +118,7 @@ class istft(nn.Module):
         print('stft forward debug output', output.size())
         return output
 
-def _get_istft_kernels(nfft, window):
+def _get_istft_kernels(nfft):
     nfft = int(nfft)
     assert nfft % 2 == 0
     def kernel_fn(time, freq):

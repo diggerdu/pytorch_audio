@@ -57,11 +57,9 @@ class TimeFrequencyTestCase(unittest.TestCase):
         magn = Variable(torch.from_numpy(magn).float())
         phase = Variable(torch.from_numpy(phase).float())
         ac = Variable(torch.from_numpy(ac).float())
-        model = tf.istft(1024, 512, window="hanning")
+        model = tf.istft(1024, 512)
         re_signal = model.forward(magn, phase, ac).data.numpy().flatten()
 
-        print(re_signal[500:520])
-        print(signal[500:520])
 
 
         snr = CalSNR(signal, re_signal)
@@ -113,8 +111,6 @@ class TimeFrequencyTestCase(unittest.TestCase):
         re_signal = istft_model.forward(magn, phase, ac)
         re_signal = re_signal.data.numpy().flatten()
 
-        print(re_signal[10600:10620])
-        print(signal[10600:10620])
 
 
         snr = CalSNR(re_signal, signal)
