@@ -83,11 +83,12 @@ class istft(nn.Module):
         self.nfft = int(nfft)
         self.n_freq = n_freq = int(nfft / 2)
         self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(nfft)
-
         trans_kernels = np.zeros((nfft, nfft), np.float64)
-        win_cof = np.ones((nfft, ), dtype=np.float64)
-        np.fill_diagonal(trans_kernels, win_cof)
-
+        np.fill_diagonal(trans_kernels, np.ones((nfft, ), dtype=np.float64))
+        self.win_cof = 1 / scipy.signal.get_window("hanning", nfft)
+        self.win_cof[0] = 0
+        self.win_cof = torch.from_numpy(self.win_cof).float()
+        self.win_cof = nn.Parameter(self.win_cof, requires_grad=False)
         self.trans_kernels = nn.Parameter(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
 
     def forward(self, magn, phase, ac):
@@ -95,6 +96,7 @@ class istft(nn.Module):
         print('istft_debug', phase.size())
         assert magn.size()[2] == phase.size()[2] == self.n_freq
         nfft = self.nfft
+        hop = self.hop_length
 
         # complex conjugate
         phase = -1. * phase
@@ -103,18 +105,17 @@ class istft(nn.Module):
 
         output = real_part - imag_part
 
-        print('stft forward debug', output.size())
 
         ac = ac.unsqueeze(1)
-        print('stft forward debug', ac.size())
         ac = float(self.ac_cof) * ac.expand_as(output)
         output = output + ac
         output = output / float(self.nfft)
 
-        print('stft forward debug', output.size())
         output = F.conv_transpose2d(output, self.trans_kernels, stride=self.hop_length)
         output = output.squeeze(1)
         output = output.squeeze(1)
+        output[:, :hop] = output[:, :hop].mul(self.win_cof[:hop])
+        output[:, -(nfft - hop):] = output[:, -(nfft - hop):].mul(self.win_cof[-(nfft - hop):])
         print('stft forward debug output', output.size())
         return output
 
@@ -163,6 +164,8 @@ class stft(nn.Module):
         phase = -1 * phase[:,:,1:,:]
         ac = magn[:,:,0,:]
         magn = magn[:,:,1:,:]
+        print('############debug##########')
+        print(magn.size())
         return magn, phase, ac
 
 

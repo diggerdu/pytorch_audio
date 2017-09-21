@@ -59,8 +59,8 @@ class TimeFrequencyTestCase(unittest.TestCase):
         ac = Variable(torch.from_numpy(ac).float())
         model = tf.istft(1024, 512)
         re_signal = model.forward(magn, phase, ac).data.numpy().flatten()
-
-
+        print(signal[:20])
+        print(re_signal[:20])
 
         snr = CalSNR(signal, re_signal)
         print("SNR:{} dB".format(snr))
@@ -68,34 +68,6 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
         print("###########ISTFT TESTED###########\n")
 
-
-
-    '''
-    def test_istft_element(self):
-        print("\n###########TESTING ISTFT ELEMENT###########")
-
-        N = 1024
-        signal = np.random.random(N)
-        input_ = np.fft.fft(signal, n=N)
-
-        ac = Variable(torch.from_numpy(np.real(input_[0]) * np.ones((1, 1, 1, 1))).float())
-        input_ = np.reshape(input_[1:N//2+1], (1, N//2, 1, 1))
-        input_ = np.repeat(input_, 4, axis=-1)
-        input_real = Variable(torch.from_numpy(np.real(input_)).float())
-        input_imag = Variable(torch.from_numpy(np.imag(input_)).float())
-
-
-        model = tf.istft(n_fft=N, hop_length=N // 2, window="NO")
-        output = model.forward(input_real, input_imag, ac).data.numpy().flatten()[:N]
-        output[N//2:] = output[N//2:] - output[:N//2]
-
-
-        snr = CalSNR(output, signal)
-        print("SNR:{} dB".format(snr))
-
-        self.assertTrue(snr > 60)
-        print("###########ISTFT TRANSPOSE TESTED###########\n")
-    '''
 
     def test_stft(self):
         print("\n###########TESTING STFT###########")
@@ -113,7 +85,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
 
 
-        snr = CalSNR(re_signal, signal)
+        snr = CalSNR(signal, re_signal)
         print("SNR:{} dB".format(snr))
 
 
