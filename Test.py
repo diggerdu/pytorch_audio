@@ -10,9 +10,9 @@ import librosa
 
 
 def CalSNR(ref, sig):
-    ref_p = np.square(ref)
-    noi_p = np.square(sig - ref)
-    return 10 * np.mean(np.log10(ref_p) - np.log10(noi_p))
+    ref_p = np.mean(np.square(ref))
+    noi_p = np.mean(np.square(sig - ref))
+    return 10 * (np.log10(ref_p) - np.log10(noi_p))
 
 
 class TimeFrequencyTestCase(unittest.TestCase):
@@ -45,7 +45,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
     def test_istft(self):
 
         print("###########TESTING ISTFT###########")
-        signal = np.random.random(4096)
+        signal = np.random.random(1016 * 1024)
         spec = librosa.stft(signal, n_fft=1024, hop_length=512, center=False)
         magn = np.real(spec)[np.newaxis, np.newaxis, :, :]
         phase = np.imag(spec)[np.newaxis, np.newaxis, :, :]
@@ -59,10 +59,8 @@ class TimeFrequencyTestCase(unittest.TestCase):
         ac = Variable(torch.from_numpy(ac).float())
         model = tf.istft(1024, 512)
         re_signal = model.forward(magn, phase, ac).data.numpy().flatten()
-        print(signal[:20])
-        print(re_signal[:20])
 
-        snr = CalSNR(signal, re_signal)
+        snr = CalSNR(signal[1024:-1024], re_signal[1024:-1024])
         print("SNR:{} dB".format(snr))
         self.assertTrue(snr > 60)
 
@@ -73,7 +71,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
         print("\n###########TESTING STFT###########")
 
         N = 1024
-        signal = np.random.random(10 * N)
+        signal = np.random.random(1016 * N)
         input = Variable(torch.from_numpy(signal[np.newaxis, :]).float())
         stft_model = tf.stft()
         istft_model = tf.istft()
@@ -85,7 +83,7 @@ class TimeFrequencyTestCase(unittest.TestCase):
 
 
 
-        snr = CalSNR(signal, re_signal)
+        snr = CalSNR(signal[N:-N], re_signal[N:-N])
         print("SNR:{} dB".format(snr))
 
 

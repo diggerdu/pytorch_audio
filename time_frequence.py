@@ -40,9 +40,7 @@ def _get_ifft_kernels(nfft):
     def kernel_fn(time, freq):
         return np.exp(1j * (2 * np.pi * time * freq) / 1024.)
 
-
     kernels = np.fromfunction(kernel_fn, (int(nfft), int(nfft/2+1)), dtype=np.float64)
-
 
     kernels = np.zeros((1024, 513)) * 1j
 
@@ -52,19 +50,13 @@ def _get_ifft_kernels(nfft):
             kernels[i, j] = kernel_fn(i, j)
     '''
 
-
-
     ac_cof = float(np.real(kernels[0, 0]))
-
 
     kernels = 2 * kernels[:, 1:]
     kernels[:, -1] = kernels[:, -1] / 2.0
 
     real_kernels = np.real(kernels)
     imag_kernels = np.imag(kernels)
-
-
-
 
     real_kernels = torch.from_numpy(real_kernels[:, np.newaxis, :, np.newaxis])
     imag_kernels = torch.from_numpy(imag_kernels[:, np.newaxis, :, np.newaxis])
@@ -85,15 +77,16 @@ class istft(nn.Module):
         self.real_kernels, self.imag_kernels, self.ac_cof = _get_istft_kernels(nfft)
         trans_kernels = np.zeros((nfft, nfft), np.float64)
         np.fill_diagonal(trans_kernels, np.ones((nfft, ), dtype=np.float64))
-        self.win_cof = 1 / scipy.signal.get_window("hanning", nfft)
-        self.win_cof[0] = 0
-        self.win_cof = torch.from_numpy(self.win_cof).float()
-        self.win_cof = nn.Parameter(self.win_cof, requires_grad=False)
+        # self.win_cof = 1 / scipy.signal.get_window("hanning", nfft)
+        # self.win_cof[0] = 0
+        # self.win_cof = torch.from_numpy(self.win_cof).float()
+        # self.win_cof = nn.Parameter(self.win_cof, requires_grad=False)
         self.trans_kernels = nn.Parameter(torch.from_numpy(trans_kernels[:, np.newaxis, np.newaxis, :]).float())
 
     def forward(self, magn, phase, ac):
-        print('istft_debug', magn.size())
-        print('istft_debug', phase.size())
+        '''
+        batch None frequency frame
+        '''
         assert magn.size()[2] == phase.size()[2] == self.n_freq
         nfft = self.nfft
         hop = self.hop_length
@@ -104,6 +97,8 @@ class istft(nn.Module):
         imag_part = F.conv2d(phase, self.imag_kernels)
 
         output = real_part - imag_part
+        import pdb; pdb.set_trace();
+        print(output.shape)
 
 
         ac = ac.unsqueeze(1)
@@ -114,9 +109,8 @@ class istft(nn.Module):
         output = F.conv_transpose2d(output, self.trans_kernels, stride=self.hop_length)
         output = output.squeeze(1)
         output = output.squeeze(1)
-        output[:, :hop] = output[:, :hop].mul(self.win_cof[:hop])
-        output[:, -(nfft - hop):] = output[:, -(nfft - hop):].mul(self.win_cof[-(nfft - hop):])
-        print('stft forward debug output', output.size())
+        # output[:, :hop] = output[:, :hop].mul(self.win_cof[:hop])
+        # output[:, -(nfft - hop):] = output[:, -(nfft - hop):].mul(self.win_cof[-(nfft - hop):])
         return output
 
 def _get_istft_kernels(nfft):
@@ -164,8 +158,6 @@ class stft(nn.Module):
         phase = -1 * phase[:,:,1:,:]
         ac = magn[:,:,0,:]
         magn = magn[:,:,1:,:]
-        print('############debug##########')
-        print(magn.size())
         return magn, phase, ac
 
 
@@ -177,6 +169,7 @@ def _get_stft_kernels(nfft, window):
         return np.exp(-1j * (2 * np.pi * time * freq) / float(nfft))
 
     kernels = np.fromfunction(kernel_fn, (nfft//2+1, nfft), dtype=np.float64)
+    print(kernels.shape)
 
     if window == "hanning":
         win_cof = scipy.signal.get_window("hanning", nfft)[np.newaxis, :]
@@ -192,48 +185,15 @@ def _get_stft_kernels(nfft, window):
 
 
 
-
-
-
-if __name__ == '__main__':
-    # signal = np.random.random(4096)
-    # signal = np.arange(4096)
-    signal = np.ones((4096, ))
-    input_ = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).float())
-    model = stft(nfft=1024, hop_length=512, window="hanning")
-    magn, phase, ac = model(input_)
-    magn = magn.data.numpy().squeeze(axis=(0, 2))
-
-
-    print("#################torch_audio##################")
-    print(magn[200:210, 3])
-    print(magn.shape)
-
-
-    ## librosa
-    import librosa
-    librosa_out = librosa.stft(signal, nfft=1024, hop_length=512, center=False)
-
-    print("#################librosa##################")
-    print(np.real(librosa_out)[201:211, 3])
-    print(librosa_out.shape)
-
-   # print(np.max(torch_out - np_out))
-
-'''
-
-if __name__ == '__main__':
-    signal = 1000 * np.ones((1024,), dtype=np.float32)
-    input_ = Variable(torch.from_numpy(signal[np.newaxis, np.newaxis, np.newaxis, :]).double())
-    model = stft(nfft=1024, hop_length=512, window="NO")
-    magn, phase, ac = model(input_)
-    magn = magn.data.numpy().squeeze(axis=(0, 2)).flatten()
-
-    np_spec = np.fft.fft(signal)
-
-    print(magn[250:260])
-    print(np.real(np_spec[251:261]))
-
+if __name__ == "__main__":
+    signal = np.random.rand(1024 * 10)
+    signal = signal - np.mean(signal)
+    signal = signal[np.newaxis, :]
+    model = stft(window="retangle")
+    real, imag, ac = model.forward(Variable(torch.from_numpy(signal).float()))
+    real = real.data.numpy()
+    imag = imag.data.numpy()
+    ac = ac.data.numpy()
     print(ac)
-    print(np.real(np_spec[0]))]
-'''
+
+
