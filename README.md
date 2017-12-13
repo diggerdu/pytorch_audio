@@ -2,7 +2,9 @@
 audio processing module for pytorch
 
 ### FFT
+`time_frequence.fft()`
 ### IFFT
+`time_frequence.ifft()`
 ### STFT
 `time_frequence.stft()`
 ### ISTFT
