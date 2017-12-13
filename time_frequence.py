@@ -97,8 +97,6 @@ class istft(nn.Module):
         imag_part = F.conv2d(phase, self.imag_kernels)
 
         output = real_part - imag_part
-        import pdb; pdb.set_trace();
-        print(output.shape)
 
 
         ac = ac.unsqueeze(1)
@@ -169,7 +167,6 @@ def _get_stft_kernels(nfft, window):
         return np.exp(-1j * (2 * np.pi * time * freq) / float(nfft))
 
     kernels = np.fromfunction(kernel_fn, (nfft//2+1, nfft), dtype=np.float64)
-    print(kernels.shape)
 
     if window == "hanning":
         win_cof = scipy.signal.get_window("hanning", nfft)[np.newaxis, :]
